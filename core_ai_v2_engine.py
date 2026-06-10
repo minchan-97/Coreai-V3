@@ -402,43 +402,55 @@ class CoreAIv2Engine:
         return engine
 
     def evaluate(self, text: str, logp_thr: float = -11.5,
-                 expand: bool = True) -> dict:
+                 expand: bool = False) -> dict:
         t0 = time.perf_counter()
         tokens = tokenize(text)
         if not tokens:
             return {"verdict":"SKIP","logp":0,"cluster":-1,
                     "ms":0,"per_cluster":{}}
 
+        # expand 기본값 False — 거짓 답변이 부풀려지는 걸 방지
         tokens_expanded = (
             self.embedder.expand(tokens)
             if expand and self.embedder else tokens
         )
 
+        all_scores = []
         best_logp = -999.0
         best_cluster = -1
         per_cluster = {}
 
         for k, m in self.markovs.items():
             s1 = m.score(tokens)
+            # expand 시 원본보다 낮은 것만 보정 (높이지 않음)
             s2 = m.score(tokens_expanded) if tokens_expanded != tokens else s1
-            s = max(s1, s2)
+            s = min(s1, max(s1, s2))  # expand로 올라가는 건 막음
             per_cluster[k] = {
                 "logp": s,
                 "keywords": self.decomposer.cluster_keywords.get(k,[]),
             }
+            all_scores.append(s)
             if s > best_logp:
                 best_logp = s
                 best_cluster = k
 
+        # 상위 2개 평균으로 판정 (하나만 맞아도 통과하는 것 방지)
+        if len(all_scores) >= 2:
+            top2 = sorted(all_scores)[-2:]
+            judge_logp = sum(top2) / len(top2)
+        else:
+            judge_logp = best_logp
+
         ms = (time.perf_counter()-t0)*1000
 
-        if best_logp >= -10.0:      verdict = "PASS"
-        elif best_logp >= logp_thr: verdict = "WARNING"
-        else:                       verdict = "FATAL"
+        if judge_logp >= -10.0:      verdict = "PASS"
+        elif judge_logp >= logp_thr: verdict = "WARNING"
+        else:                        verdict = "FATAL"
 
         return {
             "verdict": verdict,
-            "logp": best_logp,
+            "logp": judge_logp,
+            "best_logp": best_logp,
             "cluster": best_cluster,
             "cluster_keywords": self.decomposer.cluster_keywords.get(best_cluster,[]),
             "ms": ms,
