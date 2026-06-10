@@ -78,11 +78,29 @@ def run_guardrail_loop(
 
         # 가드레일 평가
         if engine.is_trained:
-            result = engine.evaluate(answer, logp_thr=logp_thr, mis_thr=mis_thr)
-            status    = result["status"]
-            avg_logp  = result["avg_logp"]
-            mismatch  = result["mismatch"]
-            elapsed   = result["elapsed_ms"]
+            try:
+                # v2 엔진 시도 (CoreAIv2Engine)
+                result = engine.evaluate(answer, logp_thr=logp_thr)
+                # v2 키 → 공통 키로 변환
+                if "verdict" in result:
+                    status   = result["verdict"]
+                    avg_logp = result.get("logp", 0.0)
+                    mismatch = 0.0
+                    elapsed  = result.get("ms", 0.0)
+                else:
+                    # v1 엔진 (NeuralMarkovEngine)
+                    result   = engine.evaluate(answer, logp_thr=logp_thr, mis_thr=mis_thr)
+                    status   = result["status"]
+                    avg_logp = result["avg_logp"]
+                    mismatch = result["mismatch"]
+                    elapsed  = result["elapsed_ms"]
+            except TypeError:
+                # mis_thr 파라미터 없는 엔진
+                result   = engine.evaluate(answer, logp_thr=logp_thr)
+                status   = result.get("verdict", result.get("status", "PASS"))
+                avg_logp = result.get("logp", result.get("avg_logp", 0.0))
+                mismatch = result.get("mismatch", 0.0)
+                elapsed  = result.get("ms", result.get("elapsed_ms", 0.0))
         else:
             status = "PASS"; avg_logp = 0.0; mismatch = 0.0; elapsed = 0.0
 
