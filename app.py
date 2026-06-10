@@ -273,9 +273,11 @@ with tab1:
             msgs = []
             if st.session_state.guideline_hint:
                 msgs.append({"role":"system","content":
-                    f"당신은 다음 가이드라인 범위 안에서만 답하는 전문 AI입니다.\n\n"
+                    f"당신은 다음 가이드라인을 참고하여 답하는 전문 AI입니다.\n\n"
                     f"가이드라인:\n{st.session_state.guideline_hint}\n\n"
-                    f"가이드라인에 없는 내용은 '가이드라인에 포함되지 않은 내용입니다'라고 답하세요."
+                    f"가이드라인을 최대한 활용하여 답하되, "
+                    f"가이드라인에 명시되지 않은 내용은 일반 지식으로 보완하여 답하세요. "
+                    f"단, 가이드라인과 명백히 다른 내용은 그렇다고 밝혀주세요."
                 })
             msgs.append({"role":"user","content":prompt})
             resp = client.chat.completions.create(
@@ -290,7 +292,7 @@ with tab1:
                 engine=st.session_state.engine,
                 max_attempts=max_retry,
                 logp_thr=logp_thr,
-                guideline_hint=st.session_state.guideline_hint[:300],
+                guideline_hint=st.session_state.guideline_hint[:600],
             )
 
         st.session_state.history.insert(0, {
